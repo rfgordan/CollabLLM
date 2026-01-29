@@ -388,3 +388,129 @@ class TestOpenAIUserModel:
             assert len(sent_messages) == 1
             assert sent_messages[0]["role"] == "user"
             assert "Test task" in sent_messages[0]["content"]
+
+
+# -- Extraction tests --
+
+
+class TestExtraction:
+    """Tests for final answer extraction."""
+
+    def test_parse_valid_extraction(self):
+        from collabllm.simulation.extraction import _parse_extraction
+
+        raw = json.dumps({
+            "thought": "The assistant revised the intro in turn 3",
+            "final_completion": "Here is the final article...",
+        })
+
+        result = _parse_extraction(raw)
+
+        assert result.final_completion == "Here is the final article..."
+        assert result.thought == "The assistant revised the intro in turn 3"
+        assert result.raw_output == raw
+
+    def test_parse_extraction_with_markdown_fences(self):
+        from collabllm.simulation.extraction import _parse_extraction
+
+        raw = '```json\n{"thought": "T", "final_completion": "Final answer"}\n```'
+
+        result = _parse_extraction(raw)
+
+        assert result.final_completion == "Final answer"
+
+    def test_parse_extraction_invalid_json(self):
+        from collabllm.simulation.extraction import _parse_extraction
+
+        raw = "The final answer is 42"
+
+        result = _parse_extraction(raw)
+
+        assert result.final_completion == raw
+        assert result.raw_output == raw
+
+    def test_format_chat_history(self):
+        from collabllm.simulation.extraction import _format_chat_history
+
+        messages = [
+            {"role": "system", "content": "System prompt"},
+            {"role": "user", "content": "Write an essay"},
+            {"role": "assistant", "content": "Here is a draft..."},
+            {"role": "user", "content": "Add more detail"},
+            {"role": "assistant", "content": "Here is the revised version..."},
+        ]
+
+        history = _format_chat_history(messages)
+
+        assert "System prompt" not in history
+        assert "USER: Write an essay" in history
+        assert "AI: Here is a draft..." in history
+        assert "USER: Add more detail" in history
+        assert "AI: Here is the revised version..." in history
+
+    def test_extract_final_answer_api_call(self):
+        """Test extract_final_answer calls OpenAI and parses response."""
+        with patch("openai.OpenAI") as mock_openai:
+            mock_client = MagicMock()
+            mock_openai.return_value = mock_client
+
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].message.content = json.dumps({
+                "thought": "Combined all revisions",
+                "final_completion": "The complete article with all edits.",
+            })
+            mock_client.chat.completions.create.return_value = mock_response
+
+            from collabllm.simulation.extraction import extract_final_answer
+
+            messages = [
+                {"role": "user", "content": "Write an article"},
+                {"role": "assistant", "content": "Here is a draft"},
+                {"role": "user", "content": "Revise it"},
+                {"role": "assistant", "content": "Here is the revision"},
+            ]
+
+            result = extract_final_answer(
+                messages=messages,
+                extract_type="article",
+                api_key="test-key",
+            )
+
+            assert result.final_completion == "The complete article with all edits."
+            assert result.thought == "Combined all revisions"
+
+            call_args = mock_client.chat.completions.create.call_args
+            sent_messages = call_args.kwargs["messages"]
+            assert len(sent_messages) == 1
+            assert "article" in sent_messages[0]["content"]
+            assert "Write an article" in sent_messages[0]["content"]
+
+    def test_simulator_extract_convenience_method(self):
+        """Test ChatSimulator.extract_final_answer wraps the function."""
+        with patch("collabllm.simulation.simulator.extract_final_answer") as mock_extract:
+            mock_extract.return_value = MagicMock(final_completion="result")
+
+            user = MockUserModel(results=[UserTurnResult(response="test")])
+            assistant = MockAssistant(responses=["test"])
+            simulator = ChatSimulator(assistant=assistant, user_model=user)
+
+            rollout_result = RolloutResult(
+                messages=[
+                    {"role": "user", "content": "Hello"},
+                    {"role": "assistant", "content": "Hi"},
+                ],
+            )
+
+            result = simulator.extract_final_answer(
+                rollout_result, extract_type="code snippet"
+            )
+
+            mock_extract.assert_called_once_with(
+                messages=rollout_result.messages,
+                extract_type="code snippet",
+                extraction_requirement="",
+                model="gpt-4o-mini",
+                api_key=None,
+            )
+            assert result.final_completion == "result"

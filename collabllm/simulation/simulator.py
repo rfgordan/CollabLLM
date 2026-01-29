@@ -5,6 +5,7 @@ from copy import deepcopy
 
 from collabllm.simulation.user_models import UserModel, UserTurnResult
 from collabllm.simulation.assistant import LocalAssistant
+from collabllm.simulation.extraction import extract_final_answer, ExtractionResult
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +210,38 @@ class ChatSimulator:
             messages=messages,
             user_turns=user_turns,
             terminated_by_user=terminated_by_user,
+        )
+
+    def extract_final_answer(
+        self,
+        rollout_result: RolloutResult,
+        extract_type: str = "response",
+        extraction_requirement: str = "",
+        model: str = "gpt-4o-mini",
+        api_key: Optional[str] = None,
+    ) -> ExtractionResult:
+        """
+        Extract the assistant's final answer from a completed rollout.
+
+        Uses an LLM to analyze the full conversation and synthesize
+        the assistant's final, complete response.
+
+        Args:
+            rollout_result: Output from rollout() or interactive_rollout().
+            extract_type: Type of content (e.g., "article", "code snippet").
+            extraction_requirement: Additional extraction instructions.
+            model: OpenAI model to use for extraction.
+            api_key: OpenAI API key (uses OPENAI_API_KEY env var if None).
+
+        Returns:
+            ExtractionResult with final_completion and thought fields.
+        """
+        return extract_final_answer(
+            messages=rollout_result.messages,
+            extract_type=extract_type,
+            extraction_requirement=extraction_requirement,
+            model=model,
+            api_key=api_key,
         )
 
     def _print_message(self, msg: Dict[str, str]) -> None:
