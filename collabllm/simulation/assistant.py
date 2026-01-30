@@ -1,7 +1,7 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 import logging
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, PreTrainedModel, PreTrainedTokenizerBase
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +11,9 @@ class LocalAssistant:
 
     def __init__(
         self,
-        model_path: str,
+        model_path: Optional[str] = None,
+        model: Optional[PreTrainedModel] = None,
+        tokenizer: Optional[PreTrainedTokenizerBase] = None,
         lora_path: Optional[str] = None,
         use_4bit: bool = False,
         device_map: str = "auto",
@@ -24,8 +26,13 @@ class LocalAssistant:
         """
         Initialize local assistant model.
 
+        Provide either model_path to load from disk, or model+tokenizer
+        to wrap an already-loaded model (e.g., from a training run).
+
         Args:
-            model_path: HuggingFace model path or local path
+            model_path: HuggingFace model path or local path (loads from disk)
+            model: Pre-loaded HuggingFace model instance
+            tokenizer: Pre-loaded tokenizer instance (required if model is provided)
             lora_path: Optional path to LoRA adapter weights
             use_4bit: Whether to use 4-bit quantization (QLoRA style)
             device_map: Device placement strategy
@@ -39,6 +46,38 @@ class LocalAssistant:
         self.temperature = temperature
         self.do_sample = do_sample
 
+        if model is not None:
+            if tokenizer is None:
+                raise ValueError("tokenizer is required when passing a pre-loaded model")
+            self.model = model
+            self.tokenizer = tokenizer
+            logger.info("Using pre-loaded model and tokenizer")
+        elif model_path is not None:
+            self.model, self.tokenizer = self._load_from_path(
+                model_path, use_4bit, device_map, torch_dtype, cache_dir
+            )
+        else:
+            raise ValueError("Either model_path or model+tokenizer must be provided")
+
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        if lora_path:
+            self._load_lora(lora_path)
+
+        logger.info(
+            f"Model ready with memory footprint: "
+            f"{self.model.get_memory_footprint() / (1024**3):.2f} GB"
+        )
+
+    @staticmethod
+    def _load_from_path(
+        model_path: str,
+        use_4bit: bool,
+        device_map: str,
+        torch_dtype: Optional[torch.dtype],
+        cache_dir: str,
+    ):
         if torch_dtype is None:
             torch_dtype = (
                 torch.bfloat16
@@ -55,7 +94,7 @@ class LocalAssistant:
             )
 
         logger.info(f"Loading model from {model_path}")
-        self.model = AutoModelForCausalLM.from_pretrained(
+        model = AutoModelForCausalLM.from_pretrained(
             model_path,
             cache_dir=cache_dir,
             quantization_config=quantization_config,
@@ -63,22 +102,13 @@ class LocalAssistant:
             device_map=device_map,
         )
 
-        self.tokenizer = AutoTokenizer.from_pretrained(
+        tokenizer = AutoTokenizer.from_pretrained(
             model_path,
             cache_dir=cache_dir,
             use_fast=True,
         )
 
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-
-        if lora_path:
-            self._load_lora(lora_path)
-
-        logger.info(
-            f"Model loaded with memory footprint: "
-            f"{self.model.get_memory_footprint() / (1024**3):.2f} GB"
-        )
+        return model, tokenizer
 
     @staticmethod
     def _sanitize_messages(messages: List[Dict[str, str]]) -> List[Dict[str, str]]:

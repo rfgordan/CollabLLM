@@ -50,7 +50,9 @@ def multiturn_dataset_to_sft(
             continue
 
         combined_conversation = {
-            "messages": [{"role": "system", "content": system_prompt}] + row["prompt"] + [{"role": "assistant", "content": row["completion"]} ]
+            "messages": [{"role": "system", "content": system_prompt}] + row["prompt"] + [{"role": "assistant", "content": row["completion"]} ],
+            "single_turn_prompt": row["single_turn_prompt"],
+            "single_turn_completion": row["single_turn_completion"],
         }
 
         out_rows.append(combined_conversation)
