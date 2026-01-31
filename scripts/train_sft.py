@@ -15,7 +15,7 @@ import torch
 # project code
 from collabllm.data_processing.dataset_utils import multiturn_dataset_to_sft
 from collabllm.training.train_utils import get_timebased_filename
-from scripts.eval import _eval_model_doc_writing, EvalResult
+from eval import _eval_model_doc_writing, EvalResult
 
 logger = logging.getLogger(__name__)
 
