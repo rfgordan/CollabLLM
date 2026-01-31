@@ -28,11 +28,7 @@ def _eval_model_doc_writing(
 
     total_samples = len(eval_dataset)
 
-    # Tokenize references for BLEU (list of list of tokens per reference)
-    references = [
-        [stc.split()] for stc in eval_dataset['single_turn_completion']
-    ]
-    hypotheses = []
+    bleu_scores = []
 
     # Create assistant once — stateless, reusable across conversations
     assistant = LocalAssistant(model=model, tokenizer=tokenizer)
@@ -76,12 +72,18 @@ def _eval_model_doc_writing(
             f"parsed final_completion:\n{extraction_result.final_completion}\n"
         )
 
-        hypotheses.append(extraction_result.final_completion.split())
+        reference = [row["single_turn_completion"].split()]
+        hypothesis = extraction_result.final_completion.split()
+        sample_bleu = bleu_score.sentence_bleu(reference, hypothesis)
+        bleu_scores.append(sample_bleu)
+
         logger.info(
             f"Processed sample {i + 1}/{total_samples} - "
+            f"BLEU: {sample_bleu:.4f} - "
+            f"reference: {row['single_turn_completion'][:100]}... - "
             f"final completion: {extraction_result.final_completion[:100]}..."
         )
 
-    bleu = bleu_score.corpus_bleu(references, hypotheses)
-    logger.info(f"BLEU score over {total_samples} samples: {bleu:.4f}")
-    return bleu
+    avg_bleu = sum(bleu_scores) / len(bleu_scores) if bleu_scores else 0.0
+    logger.info(f"Average sentence BLEU over {total_samples} samples: {avg_bleu:.4f}")
+    return avg_bleu

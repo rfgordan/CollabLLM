@@ -25,11 +25,10 @@ You should output a JSON object with two entries:
    3. How do you make sure you did not include any information that is not necessary?
 - "final_completion" (str): The final and complete version of the document, code, or content extracted from the conversation.
 
-Note: 
-1. If there are multiple lines, you should use triple quotes (""") to wrap the content. For example, "final_completion": """first line. 
-   second line.""" or "thought": """first line;
-   second line.""".
-2. In the "final_completion" entry, replace all double quotes (") with single quotes (') to prevent JSON formatting issues. For example, you can output "final_completion": "'Hello World' is a common phrase." 
+Note:
+1. For multi-line content, use \n within the JSON string to represent newlines. For example: "final_completion": "first line.\nsecond line."
+2. Escape any double quotes inside string values with a backslash. For example: "final_completion": "She said \"hello\" to him."
+3. Ensure the output is valid JSON that can be parsed by a standard JSON parser.
 
 {extraction_requirement}
 
