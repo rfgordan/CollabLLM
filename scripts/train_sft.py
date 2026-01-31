@@ -15,6 +15,7 @@ import torch
 # project code
 from collabllm.data_processing.dataset_utils import multiturn_dataset_to_sft
 from collabllm.training.train_utils import get_timebased_filename
+from scripts.eval import _eval_model_doc_writing, EvalResult
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,11 @@ def parse_args() -> argparse.Namespace:
         help="Whether to parse secrets from RunPod environment variables.",
     )
     parser.add_argument(
+        "--run_eval",
+        action="store_true",
+        help="Whether to run evaluation after training.",
+    )
+    parser.add_argument(
         "--output_name_tag",
         type=str,
         default="default",
@@ -63,6 +69,7 @@ def load_and_train_sft(
         learning_rate: float = 2e-5,
         batch_size: int = 4,
         parse_secrets_runpod: bool = False,
+        run_eval: bool = False,
         output_name_tag: str = "default"):
     
     """ Load a Hugging Face model and perform supervised fine-tuning (SFT) on the provided dataset. """
@@ -86,7 +93,7 @@ def load_and_train_sft(
     
     logger.info(f"Dataset {hf_dataset_path} loaded.\n {dataset}")
 
-    dataset_clean = multiturn_dataset_to_sft(dataset, eval_ratio=0.1, lower_bound_metric=0.1)
+    dataset_clean = multiturn_dataset_to_sft(dataset, eval_ratio=0.01, lower_bound_metric=0.1)
 
     logger.info(f"Dataset {hf_dataset_path} preprocessed.\n {dataset_clean}")
 
@@ -167,11 +174,19 @@ def load_and_train_sft(
     
     trainer.train()
 
-    # custom eval on data?
-
     # save trained model to hf?
     model.save_pretrained(f"./{run_name}")
     tokenizer.save_pretrained(f"./{run_name}")
+
+    # custom eval on data?
+    
+    eval_result = _eval_model_doc_writing(
+        model=trainer.model,
+        tokenizer=tokenizer,
+        dataset=dataset_clean,
+    ) if run_eval else None
+
+    logger.info(f"SFT training completed for model: {hf_model_path}. Eval result: {eval_result}")
 
     # trainer.push_to_hub(
     #     f"sft-model-{output_name_tag}-{get_timebased_filename()}",
@@ -213,6 +228,7 @@ def main() -> None:
         learning_rate=args.learning_rate,
         batch_size=args.batch_size,
         parse_secrets_runpod=args.parse_secrets_runpod,
+        run_eval=args.run_eval,
         output_name_tag=args.output_name_tag,
     )
 
