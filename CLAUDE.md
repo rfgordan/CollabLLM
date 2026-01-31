@@ -40,6 +40,9 @@ Add `--parse_secrets_runpod` when running on RunPod to load HF_TOKEN and WANDB_A
 ### Training Pipeline (`scripts/train_sft.py`)
 Uses QLoRA (4-bit NF4 quantization) with LoRA adapters targeting attention projection layers (q/k/v/o_proj). Integrates with Weights & Biases for logging and pushes models to HuggingFace Hub.
 
+### Known Optimization: VLLMAssistant
+The current `LocalAssistant` uses HuggingFace `generate()` which re-encodes the full conversation from scratch each turn (no KV cache reuse across turns). The original CollabLLM paper uses vLLM with `LoRARequest` for efficient inference: vLLM holds the base model with `enable_lora=True`, and LoRA adapters are hot-swapped via `LoRARequest` after saving with `model.save_pretrained()`. This would give KV cache reuse, PagedAttention, and continuous batching. See `Wuyxin/collabllm/collabllm/simulation.py` for reference.
+
 ### Data Flow
 1. Load multi-turn dataset from HF Hub
 2. Filter by score threshold (`lower_bound_metric`) and select best response per turn
