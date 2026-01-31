@@ -58,6 +58,24 @@ def _eval_model_doc_writing(
             extract_type="article",
         )
 
+        # Debug logging for low BLEU diagnosis
+        last_assistant_msg = next(
+            (m["content"] for m in reversed(rollout_result.messages) if m["role"] == "assistant"),
+            "(no assistant message)",
+        )
+        logger.debug(
+            f"Sample {i + 1}/{total_samples} - "
+            f"last assistant message:\n{last_assistant_msg}\n"
+        )
+        logger.debug(
+            f"Sample {i + 1}/{total_samples} - "
+            f"extraction raw output:\n{extraction_result.raw_output}\n"
+        )
+        logger.debug(
+            f"Sample {i + 1}/{total_samples} - "
+            f"parsed final_completion:\n{extraction_result.final_completion}\n"
+        )
+
         hypotheses.append(extraction_result.final_completion.split())
         logger.info(
             f"Processed sample {i + 1}/{total_samples} - "
