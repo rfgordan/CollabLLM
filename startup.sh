@@ -7,8 +7,8 @@ set -euo pipefail
 if ! command -v uv &>/dev/null; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
   export PATH="$HOME/.cargo/bin:$PATH"
-  source $HOME/.local/bin/env
 fi
+source $HOME/.local/bin/env
 
 # 2. Clone or update repo
 # if [ ! -d CollabLLM-repro ]; then
@@ -19,7 +19,7 @@ fi
 #   cd ..
 # fi
 
-cd CollabLLM-repro
+cd CollabLLM
 
 # 3. Sync deps
 uv sync
