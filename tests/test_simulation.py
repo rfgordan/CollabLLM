@@ -514,3 +514,278 @@ class TestExtraction:
                 api_key=None,
             )
             assert result.final_completion == "result"
+
+
+# -- _sanitize_messages tests --
+
+
+class TestSanitizeMessages:
+    """Tests for LocalAssistant._sanitize_messages (TemplateError fix)."""
+
+    def test_merges_consecutive_user_messages(self):
+        from collabllm.simulation.assistant import LocalAssistant
+
+        messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "user", "content": "Are you there?"},
+        ]
+
+        result = LocalAssistant._sanitize_messages(messages)
+
+        assert len(result) == 1
+        assert result[0]["role"] == "user"
+        assert "Hello\nAre you there?" == result[0]["content"]
+
+    def test_merges_consecutive_assistant_messages(self):
+        from collabllm.simulation.assistant import LocalAssistant
+
+        messages = [
+            {"role": "user", "content": "Hi"},
+            {"role": "assistant", "content": "Part 1"},
+            {"role": "assistant", "content": "Part 2"},
+        ]
+
+        result = LocalAssistant._sanitize_messages(messages)
+
+        assert len(result) == 2
+        assert result[1]["content"] == "Part 1\nPart 2"
+
+    def test_preserves_already_alternating(self):
+        from collabllm.simulation.assistant import LocalAssistant
+
+        messages = [
+            {"role": "system", "content": "Sys"},
+            {"role": "user", "content": "Hi"},
+            {"role": "assistant", "content": "Hello"},
+            {"role": "user", "content": "Bye"},
+        ]
+
+        result = LocalAssistant._sanitize_messages(messages)
+
+        assert len(result) == 4
+
+    def test_does_not_modify_original(self):
+        from collabllm.simulation.assistant import LocalAssistant
+
+        messages = [
+            {"role": "user", "content": "A"},
+            {"role": "user", "content": "B"},
+        ]
+        original_len = len(messages)
+
+        LocalAssistant._sanitize_messages(messages)
+
+        assert len(messages) == original_len
+        assert messages[0]["content"] == "A"
+
+    def test_empty_messages(self):
+        from collabllm.simulation.assistant import LocalAssistant
+
+        assert LocalAssistant._sanitize_messages([]) == []
+
+    def test_merges_three_consecutive(self):
+        from collabllm.simulation.assistant import LocalAssistant
+
+        messages = [
+            {"role": "user", "content": "A"},
+            {"role": "user", "content": "B"},
+            {"role": "user", "content": "C"},
+        ]
+
+        result = LocalAssistant._sanitize_messages(messages)
+
+        assert len(result) == 1
+        assert result[0]["content"] == "A\nB\nC"
+
+
+# -- LocalAssistant init validation tests --
+
+
+class TestLocalAssistantInit:
+    """Tests for LocalAssistant constructor validation."""
+
+    def test_raises_without_model_or_path(self):
+        from collabllm.simulation.assistant import LocalAssistant
+
+        with pytest.raises(ValueError, match="Either model_path or model"):
+            LocalAssistant()
+
+    def test_raises_model_without_tokenizer(self):
+        from collabllm.simulation.assistant import LocalAssistant
+
+        mock_model = MagicMock()
+        mock_model.get_memory_footprint.return_value = 1e9
+
+        with pytest.raises(ValueError, match="tokenizer is required"):
+            LocalAssistant(model=mock_model)
+
+    def test_accepts_preloaded_model_and_tokenizer(self):
+        from collabllm.simulation.assistant import LocalAssistant
+
+        mock_model = MagicMock()
+        mock_model.get_memory_footprint.return_value = 1e9
+        mock_tokenizer = MagicMock()
+        mock_tokenizer.pad_token = "<pad>"
+
+        assistant = LocalAssistant(model=mock_model, tokenizer=mock_tokenizer)
+
+        assert assistant.model is mock_model
+        assert assistant.tokenizer is mock_tokenizer
+
+    def test_sets_pad_token_when_none(self):
+        from collabllm.simulation.assistant import LocalAssistant
+
+        mock_model = MagicMock()
+        mock_model.get_memory_footprint.return_value = 1e9
+        mock_tokenizer = MagicMock()
+        mock_tokenizer.pad_token = None
+        mock_tokenizer.eos_token = "<eos>"
+
+        LocalAssistant(model=mock_model, tokenizer=mock_tokenizer)
+
+        assert mock_tokenizer.pad_token == "<eos>"
+
+
+# -- Rollout edge case tests --
+
+
+class TestRolloutEdgeCases:
+    """Tests for rollout edge cases."""
+
+    def test_system_only_prefix_user_goes_first(self):
+        """Rollout from system-only prefix should start with user."""
+        user_results = [UserTurnResult(response="Hello")]
+        user = MockUserModel(results=user_results)
+        assistant = MockAssistant(responses=["Hi there"])
+
+        simulator = ChatSimulator(assistant=assistant, user_model=user)
+        prefix = [{"role": "system", "content": "Be helpful."}]
+
+        result = simulator.rollout(prefix, max_turns=1)
+
+        # user goes first, then assistant
+        assert result.messages[1]["role"] == "user"
+        assert result.messages[1]["content"] == "Hello"
+        assert result.messages[2]["role"] == "assistant"
+
+    def test_empty_prefix_user_goes_first(self):
+        """Empty prefix should start with user."""
+        user_results = [UserTurnResult(response="Hey")]
+        user = MockUserModel(results=user_results)
+        assistant = MockAssistant(responses=["Yo"])
+
+        simulator = ChatSimulator(assistant=assistant, user_model=user)
+
+        result = simulator.rollout([], max_turns=1)
+
+        assert result.messages[0]["role"] == "user"
+
+    def test_terminal_on_first_user_turn(self):
+        """User terminates immediately on the first turn."""
+        user_results = [UserTurnResult(response="[END]", is_terminal=True)]
+        user = MockUserModel(results=user_results)
+        assistant = MockAssistant(responses=["Should not be called"])
+
+        simulator = ChatSimulator(assistant=assistant, user_model=user)
+        prefix = [{"role": "system", "content": "Sys"}]
+
+        result = simulator.rollout(prefix, max_turns=5)
+
+        assert result.terminated_by_user is True
+        assert len(result.messages) == 1  # only system message
+        assert assistant.call_count == 0
+
+    def test_max_turns_zero(self):
+        """max_turns=0 should return prefix unchanged (no turns executed)."""
+        user = MockUserModel(results=[UserTurnResult(response="test")])
+        assistant = MockAssistant(responses=["test"])
+
+        simulator = ChatSimulator(assistant=assistant, user_model=user)
+        prefix = [{"role": "user", "content": "Hello"}]
+
+        result = simulator.rollout(prefix, max_turns=0)
+
+        # With 0 turns and prefix ending with user, the final-assistant logic fires
+        assert result.messages[-1]["role"] == "assistant"
+        assert user.call_count == 0
+
+    def test_start_with_assistant_override(self):
+        """Explicitly override start_with_assistant=True."""
+        user_results = [UserTurnResult(response="Follow up")]
+        user = MockUserModel(results=user_results)
+        assistant = MockAssistant(responses=["First response", "Second response"])
+
+        simulator = ChatSimulator(assistant=assistant, user_model=user)
+        prefix = [{"role": "system", "content": "Sys"}]
+
+        result = simulator.rollout(prefix, max_turns=1, start_with_assistant=True)
+
+        # assistant goes first despite system-only prefix
+        assert result.messages[1]["role"] == "assistant"
+        assert result.messages[1]["content"] == "First response"
+
+
+# -- Parse response edge cases --
+
+
+class TestParseResponseEdgeCases:
+    """Edge cases for user model JSON parsing."""
+
+    def test_terminal_signal_with_whitespace(self):
+        model = MockUserModel(results=[UserTurnResult(response="test")])
+        raw = json.dumps({
+            "current_answer": "Done",
+            "thought": "Finished",
+            "response": "  [END]  ",
+        })
+
+        result = model._parse_response(raw)
+
+        assert result.is_terminal is True
+
+    def test_custom_terminal_signal(self):
+        model = MockUserModel(results=[UserTurnResult(response="test")])
+        model.terminal_signal = "STOP"
+        raw = json.dumps({
+            "response": "STOP",
+            "thought": "Done",
+        })
+
+        result = model._parse_response(raw)
+
+        assert result.is_terminal is True
+
+    def test_partial_terminal_signal_not_terminal(self):
+        model = MockUserModel(results=[UserTurnResult(response="test")])
+        raw = json.dumps({
+            "response": "[END] but I have more to say",
+            "thought": "Not done",
+        })
+
+        result = model._parse_response(raw)
+
+        assert result.is_terminal is False
+
+    def test_markdown_fences_with_language_tag(self):
+        model = MockUserModel(results=[UserTurnResult(response="test")])
+        raw = '```json\n{"response": "hello", "thought": "T"}\n```'
+
+        result = model._parse_response(raw)
+
+        assert result.response == "hello"
+
+    def test_markdown_fences_without_language_tag(self):
+        model = MockUserModel(results=[UserTurnResult(response="test")])
+        raw = '```\n{"response": "hello", "thought": "T"}\n```'
+
+        result = model._parse_response(raw)
+
+        assert result.response == "hello"
+
+    def test_empty_string_input(self):
+        model = MockUserModel(results=[UserTurnResult(response="test")])
+
+        result = model._parse_response("")
+
+        assert result.response == ""
+        assert result.is_terminal is False

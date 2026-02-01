@@ -16,7 +16,7 @@ import wandb
 # project code
 from collabllm.data_processing.dataset_utils import multiturn_dataset_to_sft
 from collabllm.training.train_utils import get_timebased_filename
-from eval import _eval_model_doc_writing, EvalResult
+from scripts.eval import eval_from_model, EvalResult
 
 logger = logging.getLogger(__name__)
 
@@ -181,10 +181,11 @@ def load_and_train_sft(
 
     # custom eval on data?
     
-    eval_result = _eval_model_doc_writing(
+    eval_result = eval_from_model(
         model=trainer.model,
         tokenizer=tokenizer,
         dataset=dataset_clean,
+        num_samples=4,
     ) if run_eval else None
 
     logger.info(f"SFT training completed for model: {hf_model_path}. Eval result: {eval_result}")
