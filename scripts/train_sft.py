@@ -11,6 +11,7 @@ from trl import SFTTrainer, SFTConfig
 from peft import LoraConfig
 from datasets import load_dataset
 import torch
+import wandb
 
 # project code
 from collabllm.data_processing.dataset_utils import multiturn_dataset_to_sft
@@ -195,6 +196,11 @@ def load_and_train_sft(
     # )
 
     # wandb.finish()
+
+    if wandb.run is not None:
+        wandb.run.summary.update(eval_result)
+        wandb.run.log({"eval_result": eval_result})
+        wandb.run.finish()
 
 def main() -> None:
     args = parse_args()
