@@ -64,18 +64,13 @@ def parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
-def _log_trainable_params(model: torch.nn.Module) -> None:
-    """ Log the number of trainable parameters in the model. """
+def _get_param_counts(model: torch.nn.Module) -> dict:
+    """Get trainable and total parameter counts."""
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total = sum(p.numel() for p in model.parameters())
-    pct = 100 * trainable / total
-
-    s = (
-        f"trainable params: {trainable:,} || "
-        f"all params: {total:,} || "
-        f"trainable%: {pct:.4f}"
-    )
-    logger.info(s)
+    pct = 100 * trainable / total if total else 0
+    logger.info(f"trainable params: {trainable:,} || all params: {total:,} || trainable%: {pct:.4f}")
+    return {"trainable_params": trainable, "total_params": total}
 
 def load_and_train_sft(
         hf_model_path: str, 
@@ -186,10 +181,9 @@ def load_and_train_sft(
         # callbacks=[CustomMetricsCallback()],
     )
 
-    logger.info("SFTTrainer initialized. Trainable parameters:")
-    _log_trainable_params(trainer.model)
-    trainer.model.print_trainable_parameters()
-    
+    logger.info("SFTTrainer initialized.")
+    param_counts = _get_param_counts(trainer.model)
+
     trainer.train()
 
     # save trained model to hf?
@@ -217,9 +211,19 @@ def load_and_train_sft(
     # wandb.finish()
 
     if wandb.run is not None:
+        summary = {
+            "model_path": hf_model_path,
+            "dataset_path": hf_dataset_path,
+            "learning_rate": learning_rate,
+            "batch_size": batch_size,
+            "num_epochs": training_arguments.num_train_epochs,
+            "lora_r": peft_config.r,
+            "lora_alpha": peft_config.lora_alpha,
+            **param_counts,
+        }
         if eval_result is not None:
-            wandb.run.summary.update(eval_result.as_dict())
-            wandb.run.log(eval_result.as_dict())
+            summary.update(eval_result.as_dict())
+        wandb.run.summary.update(summary)
         wandb.run.finish()
 
 def main() -> None:
