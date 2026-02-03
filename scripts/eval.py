@@ -1,6 +1,6 @@
-from dataclasses import dataclass
-from typing import List, Optional
-import argparse, os, logging, random, json
+from dataclasses import dataclass, field
+from typing import List, Optional, Dict
+import argparse, os, logging, random, json, time
 from nltk.translate import bleu_score
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from datasets import load_dataset
@@ -15,6 +15,52 @@ from collabllm.data_processing.dataset_utils import multiturn_dataset_to_sft
 
 DOC_WRITING_TASK_DESC = "Write a medium article."
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TimingStats:
+    """Timing statistics for an eval run."""
+    total_time: float = 0.0
+    assistant_time: float = 0.0
+    user_time: float = 0.0
+    num_samples: int = 0
+
+    def as_dict(self) -> Dict:
+        return {
+            "total_time_s": self.total_time,
+            "assistant_time_s": self.assistant_time,
+            "user_time_s": self.user_time,
+            "avg_assistant_time_s": self.assistant_time / max(1, self.num_samples),
+            "avg_user_time_s": self.user_time / max(1, self.num_samples),
+            "avg_sample_time_s": self.total_time / max(1, self.num_samples),
+            "num_samples": self.num_samples,
+        }
+
+
+class TimedAssistant:
+    """Wrapper that tracks cumulative generation time."""
+    def __init__(self, assistant):
+        self._assistant = assistant
+        self.total_time = 0.0
+
+    def generate(self, messages):
+        start = time.perf_counter()
+        result = self._assistant.generate(messages)
+        self.total_time += time.perf_counter() - start
+        return result
+
+
+class TimedUserModel:
+    """Wrapper that tracks cumulative generation time."""
+    def __init__(self, user_model):
+        self._user_model = user_model
+        self.total_time = 0.0
+
+    def generate(self, messages):
+        start = time.perf_counter()
+        result = self._user_model.generate(messages)
+        self.total_time += time.perf_counter() - start
+        return result
 
 
 @dataclass
@@ -71,15 +117,20 @@ def _run_eval(
     interactivity_scores = []
     sampled_traces: List[SampledTrace] = []
 
+    timed_assistant = TimedAssistant(assistant)
+    cumulative_user_time = 0.0
+    eval_start = time.perf_counter()
+
     for i, row in enumerate(eval_dataset):
         user_model = OpenAIUserModel(
             task_desc=DOC_WRITING_TASK_DESC,
             single_turn_prompt=row["single_turn_prompt"],
         )
+        timed_user = TimedUserModel(user_model)
 
         simulator = ChatSimulator(
-            assistant=assistant,
-            user_model=user_model,
+            assistant=timed_assistant,
+            user_model=timed_user,
         )
 
         rollout_result: RolloutResult = simulator.rollout(
@@ -144,6 +195,8 @@ def _run_eval(
                 termination_reason=termination_reason,
             ))
 
+        cumulative_user_time += timed_user.total_time
+
         logger.info(
             f"Processed sample {i + 1}/{total_samples} - "
             f"BLEU: {sample_bleu:.4f} - "
@@ -152,6 +205,15 @@ def _run_eval(
             f"reference: {row['single_turn_completion'][:100]}... - "
             f"final completion: {extraction_result.final_completion[:100]}..."
         )
+
+    timing = TimingStats(
+        total_time=time.perf_counter() - eval_start,
+        assistant_time=timed_assistant.total_time,
+        user_time=cumulative_user_time,
+        num_samples=total_samples,
+    )
+    logger.info(f"Timing: {timing.as_dict()}")
+    _log_timing_to_wandb(timing)
 
     avg_bleu = sum(bleu_scores) / len(bleu_scores) if bleu_scores else 0.0
     avg_tokens = sum(token_counts) / len(token_counts) if token_counts else 0.0
@@ -248,6 +310,23 @@ def _log_traces_to_wandb(traces: List[SampledTrace]) -> None:
         logger.warning("wandb not installed, skipping trace logging")
     except Exception as e:
         logger.warning(f"Failed to log traces to wandb: {e}")
+
+
+def _log_timing_to_wandb(timing: TimingStats) -> None:
+    """Log timing statistics to wandb."""
+    try:
+        import wandb
+
+        if wandb.run is None:
+            wandb.init(project="collabllm", job_type="eval")
+
+        wandb.log(timing.as_dict())
+        logger.info("Logged timing stats to wandb")
+
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning(f"Failed to log timing to wandb: {e}")
 
 
 def parse_args() -> argparse.Namespace:
