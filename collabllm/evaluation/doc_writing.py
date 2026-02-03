@@ -80,6 +80,9 @@ class EvalResult:
     avg_tokens: float
     avg_itr: float
 
+    def as_dict(self) -> Dict:
+        return {"avg_bleu": self.avg_bleu, "avg_tokens": self.avg_tokens, "avg_itr": self.avg_itr}
+
 
 def _log_traces_to_wandb(traces: List[SampledTrace]) -> None:
     """Log sampled eval traces as a wandb artifact."""

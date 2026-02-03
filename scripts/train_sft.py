@@ -64,6 +64,19 @@ def parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
+def _log_trainable_params(model: torch.nn.Module) -> None:
+    """ Log the number of trainable parameters in the model. """
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total = sum(p.numel() for p in model.parameters())
+    pct = 100 * trainable / total
+
+    s = (
+        f"trainable params: {trainable:,} || "
+        f"all params: {total:,} || "
+        f"trainable%: {pct:.4f}"
+    )
+    logger.info(s)
+
 def load_and_train_sft(
         hf_model_path: str, 
         hf_dataset_path: str,
@@ -172,6 +185,10 @@ def load_and_train_sft(
         args=training_arguments,
         # callbacks=[CustomMetricsCallback()],
     )
+
+    logger.info("SFTTrainer initialized. Trainable parameters:")
+    _log_trainable_params(trainer.model)
+    trainer.model.print_trainable_parameters()
     
     trainer.train()
 
@@ -188,6 +205,7 @@ def load_and_train_sft(
         num_samples=4,
     ) if run_eval else None
 
+    logger.info(f"Eval result: {eval_result}")
     logger.info(f"SFT training completed for model: {hf_model_path}. Eval result: {eval_result}")
 
     # trainer.push_to_hub(
@@ -199,8 +217,9 @@ def load_and_train_sft(
     # wandb.finish()
 
     if wandb.run is not None:
-        wandb.run.summary.update(eval_result)
-        wandb.run.log({"eval_result": eval_result})
+        if eval_result is not None:
+            wandb.run.summary.update(eval_result.as_dict())
+            wandb.run.log(eval_result.as_dict())
         wandb.run.finish()
 
 def main() -> None:
