@@ -65,6 +65,10 @@ class LocalAssistant:
         if lora_path:
             self._load_lora(lora_path)
 
+        if torch.cuda.is_available():
+            self.model = torch.compile(self.model)
+            logger.info("Model compiled with torch.compile()")
+
         logger.info(
             f"Model ready with memory footprint: "
             f"{self.model.get_memory_footprint() / (1024**3):.2f} GB"
