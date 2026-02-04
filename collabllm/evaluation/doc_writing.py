@@ -1,6 +1,6 @@
 """Document writing evaluation via simulated conversations."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Dict
 import logging, random, json, time
 from nltk.translate import bleu_score
@@ -68,10 +68,11 @@ class _TimedUserModel:
 class SampledTrace:
     """A sampled trajectory from an eval run."""
     single_turn_prompt: str
-    first_user_message: str
-    last_assistant_message: str
+    messages: List[Dict[str, str]]
     extracted_final_completion: str
     termination_reason: str
+    interactivity_score: float = 0.0
+    interactivity_thought: str = ""
 
 
 @dataclass
@@ -80,6 +81,7 @@ class EvalResult:
     avg_bleu: float
     avg_tokens: float
     avg_itr: float
+    sampled_traces: List[SampledTrace] = field(default_factory=list)
 
     def as_dict(self) -> Dict:
         return {"avg_bleu": self.avg_bleu, "avg_tokens": self.avg_tokens, "avg_itr": self.avg_itr}
@@ -97,10 +99,11 @@ def _log_traces_to_wandb(traces: List[SampledTrace]) -> None:
         traces_data = [
             {
                 "single_turn_prompt": t.single_turn_prompt,
-                "first_user_message": t.first_user_message,
-                "last_assistant_message": t.last_assistant_message,
+                "messages": t.messages,
                 "extracted_final_completion": t.extracted_final_completion,
                 "termination_reason": t.termination_reason,
+                "interactivity_score": t.interactivity_score,
+                "interactivity_thought": t.interactivity_thought,
             }
             for t in traces
         ]
@@ -189,7 +192,7 @@ def _run_eval(
         )
 
         rollout_result: RolloutResult = simulator.rollout(
-            conversation_prefix=row["messages"],
+            conversation_prefix=[row["messages"][0]],
             max_turns=max_turns,
         )
 
@@ -219,18 +222,15 @@ def _run_eval(
         interactivity_scores.append(itr_result.score)
 
         if i in sample_indices:
-            first_user_msg = next(
-                (m["content"] for m in rollout_result.messages if m["role"] == "user"),
-                "(no user message)",
-            )
             termination_reason = "user_signal" if rollout_result.terminated_by_user else "max_turns"
 
             sampled_traces.append(SampledTrace(
                 single_turn_prompt=row["single_turn_prompt"],
-                first_user_message=first_user_msg,
-                last_assistant_message=last_assistant_msg,
+                messages=rollout_result.messages,
                 extracted_final_completion=extraction_result.final_completion,
                 termination_reason=termination_reason,
+                interactivity_score=itr_result.score,
+                interactivity_thought=itr_result.thought,
             ))
 
         cumulative_user_time += timed_user.total_time
@@ -264,7 +264,7 @@ def _run_eval(
     if sampled_traces:
         _log_traces_to_wandb(sampled_traces)
 
-    return EvalResult(avg_bleu=avg_bleu, avg_tokens=avg_tokens, avg_itr=avg_itr)
+    return EvalResult(avg_bleu=avg_bleu, avg_tokens=avg_tokens, avg_itr=avg_itr, sampled_traces=sampled_traces)
 
 
 def evaluate_model(
