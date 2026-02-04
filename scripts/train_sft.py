@@ -191,7 +191,7 @@ def load_and_train_sft(
     tokenizer.save_pretrained(f"./{run_name}")
 
     # custom eval on data?
-    
+    model.config.use_cache = True  # re-enable cache for inference/eval
     eval_result = evaluate_model(
         model=trainer.model,
         tokenizer=tokenizer,
