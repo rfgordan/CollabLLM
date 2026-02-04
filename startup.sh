@@ -6,7 +6,7 @@ set -euo pipefail
 # 1. Install uv if missing
 if ! command -v uv &>/dev/null; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
-  export PATH="$HOME/.cargo/bin:$PATH"
+  export PATH="$HOME/.local/bin:$PATH"
 fi
 source $HOME/.local/bin/env
 

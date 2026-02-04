@@ -10,6 +10,7 @@ from collabllm.simulation.simulator import ChatSimulator, RolloutResult
 from collabllm.simulation.extraction import ExtractionResult
 from collabllm.simulation.user_models import OpenAIUserModel
 from collabllm.simulation.assistant import LocalAssistant
+from collabllm.simulation.vllm_assistant import VLLMAssistant
 from collabllm.metrics import evaluate_interactivity
 
 logger = logging.getLogger(__name__)
@@ -139,15 +140,15 @@ def _log_timing_to_wandb(timing: TimingStats) -> None:
 
 
 def _run_eval(
-    assistant: LocalAssistant,
+    assistant,
     dataset,
     num_samples: int = 0,
     max_turns: int = 5,
 ) -> EvalResult:
-    """Core eval logic operating on a LocalAssistant and preprocessed dataset.
+    """Core eval logic operating on an assistant and preprocessed dataset.
 
     Args:
-        assistant: LocalAssistant instance (pre-loaded or from path).
+        assistant: Any object with a generate(messages) -> str method.
         dataset: DatasetDict with 'eval' split (output of multiturn_dataset_to_sft).
         num_samples: Number of eval traces to sample and log to wandb (0 = none).
         max_turns: Maximum conversation turns per rollout.
@@ -308,5 +309,31 @@ def evaluate_checkpoint(
         model_path=model_path,
         lora_path=lora_path,
         use_4bit=use_4bit,
+    )
+    return _run_eval(assistant, dataset, num_samples=num_samples, max_turns=max_turns)
+
+
+def evaluate_checkpoint_vllm(
+    model_path: str,
+    dataset,
+    lora_path: Optional[str] = None,
+    num_samples: int = 0,
+    max_turns: int = 5,
+    **vllm_kwargs,
+) -> EvalResult:
+    """Evaluate a model checkpoint on doc writing using vLLM.
+
+    Args:
+        model_path: HuggingFace model path or local path.
+        dataset: DatasetDict with 'eval' split.
+        lora_path: Optional path to LoRA adapter weights.
+        num_samples: Number of eval traces to sample and log to wandb.
+        max_turns: Maximum conversation turns per rollout.
+        **vllm_kwargs: Additional arguments passed to vLLM LLM constructor.
+    """
+    assistant = VLLMAssistant(
+        model_path=model_path,
+        lora_path=lora_path,
+        **vllm_kwargs,
     )
     return _run_eval(assistant, dataset, num_samples=num_samples, max_turns=max_turns)

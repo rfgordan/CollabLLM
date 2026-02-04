@@ -1,6 +1,7 @@
 """Tests for the simulation module."""
 
 import json
+import sys
 import pytest
 from typing import List, Dict
 from unittest.mock import MagicMock, patch
@@ -789,3 +790,105 @@ class TestParseResponseEdgeCases:
 
         assert result.response == ""
         assert result.is_terminal is False
+
+
+# -- VLLMAssistant tests --
+
+
+class TestVLLMAssistant:
+    """Tests for VLLMAssistant with mocked vLLM."""
+
+    def _make_mock_vllm_modules(self):
+        """Create mock vllm modules and patch them into sys.modules."""
+        mock_vllm = MagicMock()
+        mock_lora_module = MagicMock()
+        mock_vllm.lora = mock_lora_module
+        mock_vllm.lora.request = mock_lora_module
+        return mock_vllm
+
+    def test_generate_calls_vllm_chat(self):
+        """Verify generate() delegates to llm.chat()."""
+        mock_vllm = self._make_mock_vllm_modules()
+        mock_output = MagicMock()
+        mock_output.outputs[0].text = "Hello from vLLM"
+        mock_vllm.LLM.return_value.chat.return_value = [mock_output]
+
+        with patch.dict(sys.modules, {
+            "vllm": mock_vllm,
+            "vllm.lora": mock_vllm.lora,
+            "vllm.lora.request": mock_vllm.lora.request,
+        }):
+            from collabllm.simulation.vllm_assistant import VLLMAssistant
+
+            assistant = VLLMAssistant(model_path="test-model", enable_lora=False)
+
+            messages = [{"role": "user", "content": "Hi"}]
+            result = assistant.generate(messages)
+
+            assert result == "Hello from vLLM"
+            mock_vllm.LLM.return_value.chat.assert_called_once()
+            call_args = mock_vllm.LLM.return_value.chat.call_args
+            assert call_args[0][0] == messages
+            assert call_args[1]["lora_request"] is None
+
+    def test_generate_with_lora(self):
+        """Verify LoRARequest is created and passed to llm.chat()."""
+        mock_vllm = self._make_mock_vllm_modules()
+        mock_output = MagicMock()
+        mock_output.outputs[0].text = "LoRA response"
+        mock_vllm.LLM.return_value.chat.return_value = [mock_output]
+
+        mock_lora_request = MagicMock()
+        mock_vllm.lora.request.LoRARequest.return_value = mock_lora_request
+
+        with patch.dict(sys.modules, {
+            "vllm": mock_vllm,
+            "vllm.lora": mock_vllm.lora,
+            "vllm.lora.request": mock_vllm.lora.request,
+        }):
+            from collabllm.simulation.vllm_assistant import VLLMAssistant
+
+            assistant = VLLMAssistant(
+                model_path="test-model",
+                lora_path="/path/to/lora",
+            )
+
+            messages = [{"role": "user", "content": "Hi"}]
+            result = assistant.generate(messages)
+
+            assert result == "LoRA response"
+            mock_vllm.lora.request.LoRARequest.assert_called_once_with(
+                "adapter", 1, "/path/to/lora"
+            )
+            call_args = mock_vllm.LLM.return_value.chat.call_args
+            assert call_args[1]["lora_request"] is mock_lora_request
+
+    def test_vllm_assistant_works_with_chat_simulator(self):
+        """End-to-end: VLLMAssistant plugs into ChatSimulator."""
+        mock_vllm = self._make_mock_vllm_modules()
+        mock_output = MagicMock()
+        mock_output.outputs[0].text = "vLLM says hello"
+        mock_vllm.LLM.return_value.chat.return_value = [mock_output]
+
+        with patch.dict(sys.modules, {
+            "vllm": mock_vllm,
+            "vllm.lora": mock_vllm.lora,
+            "vllm.lora.request": mock_vllm.lora.request,
+        }):
+            from collabllm.simulation.vllm_assistant import VLLMAssistant
+
+            assistant = VLLMAssistant(model_path="test-model", enable_lora=False)
+
+            user_results = [UserTurnResult(response="User question")]
+            user = MockUserModel(results=user_results)
+
+            simulator = ChatSimulator(assistant=assistant, user_model=user)
+            prefix = [
+                {"role": "system", "content": "Be helpful."},
+                {"role": "user", "content": "Initial question"},
+            ]
+
+            result = simulator.rollout(prefix, max_turns=1)
+
+            assert any(m["content"] == "vLLM says hello" for m in result.messages)
+            assert result.messages[-1]["role"] == "assistant"

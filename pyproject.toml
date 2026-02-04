@@ -18,6 +18,9 @@ dependencies = [
     "wandb>=0.24.1",
 ]
 
+[project.optional-dependencies]
+vllm = ["vllm>=0.6.0"]
+
 [dependency-groups]
 dev = [
     "ipykernel>=7.1.0",

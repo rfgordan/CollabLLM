@@ -4,7 +4,6 @@ import logging
 from copy import deepcopy
 
 from collabllm.simulation.user_models import UserModel, UserTurnResult
-from collabllm.simulation.assistant import LocalAssistant
 from collabllm.simulation.extraction import extract_final_answer, ExtractionResult
 
 logger = logging.getLogger(__name__)
@@ -29,14 +28,15 @@ class ChatSimulator:
 
     def __init__(
         self,
-        assistant: LocalAssistant,
+        assistant,
         user_model: UserModel,
     ):
         """
         Initialize the chat simulator.
 
         Args:
-            assistant: Local LLM to act as the assistant
+            assistant: Any object with a generate(messages) -> str method
+                (e.g. LocalAssistant, VLLMAssistant)
             user_model: API-based model to simulate the user
         """
         self.assistant = assistant
