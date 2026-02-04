@@ -62,6 +62,12 @@ def parse_args() -> argparse.Namespace:
         default="default",
         help="Tag to append to the output model name.",
     )
+    parser.add_argument(
+        "--max_turns",
+        type=int,
+        default=5,
+        help="Maximum conversation turns per eval rollout.",
+    )
     return parser.parse_args()
 
 def _get_param_counts(model: torch.nn.Module) -> dict:
@@ -73,13 +79,14 @@ def _get_param_counts(model: torch.nn.Module) -> dict:
     return {"trainable_params": trainable, "total_params": total}
 
 def load_and_train_sft(
-        hf_model_path: str, 
+        hf_model_path: str,
         hf_dataset_path: str,
         learning_rate: float = 2e-5,
         batch_size: int = 4,
         parse_secrets_runpod: bool = False,
         run_eval: bool = False,
-        output_name_tag: str = "default"):
+        output_name_tag: str = "default",
+        max_turns: int = 5):
     
     """ Load a Hugging Face model and perform supervised fine-tuning (SFT) on the provided dataset. """
 
@@ -196,6 +203,7 @@ def load_and_train_sft(
         dataset=dataset_clean,
         lora_path=f"./{run_name}",
         num_samples=4,
+        max_turns=max_turns,
     ) if run_eval else None
 
     logger.info(f"Eval result: {eval_result}")
@@ -259,6 +267,7 @@ def main() -> None:
         parse_secrets_runpod=args.parse_secrets_runpod,
         run_eval=args.run_eval,
         output_name_tag=args.output_name_tag,
+        max_turns=args.max_turns,
     )
 
 if __name__ == "__main__":
