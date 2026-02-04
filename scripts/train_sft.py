@@ -16,7 +16,7 @@ import wandb
 # project code
 from collabllm.data_processing.dataset_utils import multiturn_dataset_to_sft
 from collabllm.training.train_utils import get_timebased_filename
-from collabllm.evaluation import evaluate_model, EvalResult
+from collabllm.evaluation import evaluate_checkpoint_vllm, EvalResult
 
 logger = logging.getLogger(__name__)
 
@@ -191,11 +191,10 @@ def load_and_train_sft(
     tokenizer.save_pretrained(f"./{run_name}")
 
     # custom eval on data?
-    model.config.use_cache = True  # re-enable cache for inference/eval
-    eval_result = evaluate_model(
-        model=trainer.model,
-        tokenizer=tokenizer,
+    eval_result = evaluate_checkpoint_vllm(
+        model_path=hf_model_path,
         dataset=dataset_clean,
+        lora_path=f"./{run_name}",
         num_samples=4,
     ) if run_eval else None
 
