@@ -70,7 +70,7 @@ def _format_chat_history(messages: List[Dict[str, str]]) -> str:
     for msg in messages:
         if msg["role"] == "system":
             continue
-        label = "USER" if msg["role"] == "user" else "AI"
+        label = "USER" if msg["role"] == "user" else "AI ASSISTANT"
         lines.append(f"{label}: {msg['content']}")
     return "\n".join(lines) if lines else "(empty)"
 
