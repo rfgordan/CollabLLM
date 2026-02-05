@@ -68,6 +68,34 @@ def parse_args() -> argparse.Namespace:
         default=5,
         help="Maximum conversation turns per eval rollout.",
     )
+    parser.add_argument(
+        "--eval_ratio", type=float, default=0.05,
+        help="Fraction of dataset to use for eval (default: 5%).",
+    )
+    parser.add_argument(
+        "--num_train_epochs",
+        type=int,
+        default=3,
+        help="Number of training epochs.",
+    )
+    parser.add_argument(
+        "--lora_alpha",
+        type=int,
+        default=16,
+        help="LoRA alpha parameter.",
+    )
+    parser.add_argument(
+        "--lora_r",
+        type=int,
+        default=16,
+        help="LoRA rank parameter.",
+    )
+    parser.add_argument(
+        "--lora_dropout",
+        type=float,
+        default=0.1,
+        help="LoRA dropout rate.",
+    )
     return parser.parse_args()
 
 def _get_param_counts(model: torch.nn.Module) -> dict:
@@ -86,7 +114,12 @@ def load_and_train_sft(
         parse_secrets_runpod: bool = False,
         run_eval: bool = False,
         output_name_tag: str = "default",
-        max_turns: int = 5):
+        max_turns: int = 5,
+        eval_ratio: float = 0.05,
+        num_train_epochs: int = 3,
+        lora_alpha: int = 16,
+        lora_r: int = 16,
+        lora_dropout: float = 0.1,):
     
     """ Load a Hugging Face model and perform supervised fine-tuning (SFT) on the provided dataset. """
 
@@ -109,7 +142,7 @@ def load_and_train_sft(
     
     logger.info(f"Dataset {hf_dataset_path} loaded.\n {dataset}")
 
-    dataset_clean = multiturn_dataset_to_sft(dataset, eval_ratio=0.01, lower_bound_metric=0.1)
+    dataset_clean = multiturn_dataset_to_sft(dataset, eval_ratio=eval_ratio, lower_bound_metric=0.1)
 
     logger.info(f"Dataset {hf_dataset_path} preprocessed.\n {dataset_clean}")
 
@@ -148,9 +181,9 @@ def load_and_train_sft(
 
     # LORA setup
     peft_config = LoraConfig(
-        lora_alpha=16,
-        lora_dropout=0.1,
-        r=16,
+        r=lora_r,
+        lora_alpha=lora_alpha,
+        lora_dropout=lora_dropout,
         bias="none",
         init_lora_weights="gaussian",
         task_type="CAUSAL_LM",
@@ -171,7 +204,7 @@ def load_and_train_sft(
         logging_steps=True,
         learning_rate=learning_rate,
         gradient_checkpointing=True,
-        num_train_epochs=2,
+        num_train_epochs=num_train_epochs,
         eval_strategy="epoch",
         # eval_steps=500,
         save_strategy="epoch",
@@ -268,6 +301,11 @@ def main() -> None:
         run_eval=args.run_eval,
         output_name_tag=args.output_name_tag,
         max_turns=args.max_turns,
+        eval_ratio=args.eval_ratio,
+        num_train_epochs=args.num_train_epochs,
+        lora_alpha=args.lora_alpha,
+        lora_r=args.lora_r,
+        lora_dropout=args.lora_dropout,
     )
 
 if __name__ == "__main__":
