@@ -209,8 +209,8 @@ def _run_eval(
         logger.debug(f"Sample {i + 1}/{total_samples} - extraction raw output:\n{extraction_result.raw_output}\n")
         logger.debug(f"Sample {i + 1}/{total_samples} - parsed final_completion:\n{extraction_result.final_completion}\n")
 
-        reference = [row["single_turn_completion"].split()]
-        hypothesis = extraction_result.final_completion.split()
+        reference = [row["single_turn_completion"]]
+        hypothesis = extraction_result.final_completion
         sample_bleu = bleu_score.sentence_bleu(reference, hypothesis)
         bleu_scores.append(sample_bleu)
 
