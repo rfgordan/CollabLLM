@@ -15,6 +15,7 @@ Give a float number between 0 and 1, where:
     0 = Low interactivity: The assistant shows low engagement, asks few relevant questions, and barely try to understand the user's needs.
      - Example: The assistant provides a vague or incomplete response without fully understanding the user's intent, such as "Climate change is bad," without asking any follow-up questions or providing detailed information.
 
+For example, if the assistant proceeds immediately to supply a response to the query without asking questions, and the user is forced to drive follow up discussion to meet their needs, the interactivity score should be low.
 
 Output format (JSON):
 {{
