@@ -227,8 +227,16 @@ def load_and_train_sft(
     trainer.train()
 
     # save trained model to hf?
-    model.save_pretrained(f"./{run_name}")
+    trainer.model.save_pretrained(f"./{run_name}")
     tokenizer.save_pretrained(f"./{run_name}")
+
+    # free GPU memory before vLLM loads the model fresh
+    del trainer
+    del model
+    torch.cuda.empty_cache()
+    import gc
+    gc.collect()
+    logger.info("Cleared training model from GPU memory")
 
     # custom eval on data?
     eval_result = evaluate_checkpoint_vllm(

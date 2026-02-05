@@ -78,7 +78,7 @@ class TestInteractivityFormatting:
 
         assert "System prompt" not in history
         assert "USER: Hello" in history
-        assert "AI: Hi, what can I help with?" in history
+        assert "AI ASSISTANT: Hi, what can I help with?" in history
 
     def test_format_empty_conversation(self):
         messages = [{"role": "system", "content": "System prompt"}]
