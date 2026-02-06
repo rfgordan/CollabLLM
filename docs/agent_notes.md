@@ -35,14 +35,16 @@
 
 ## Run Log
 
-### Run 3: Eval (vLLM) — 2026-02-06 ~00:31 UTC
+### Run 3: Eval (vLLM) — 2026-02-06 ~00:31 UTC — COMPLETE
 - **Command:** `python scripts/eval.py --dataset_path collabllm/collabllm-multiturn-medium-large --model_path meta-llama/Llama-3.1-8B-Instruct --lora_path boreasg/sft-llama8b_test-test_20260206_000112 --use_4bit --eval_ratio 0.01 --max_turns 14 --num_samples 4 --use_vllm`
-- **Log:** `/tmp/eval_output.log`
-- **Status:** IN PROGRESS at time of writing
-- **Partial results:**
-  - Sample 1: BLEU 0.2563, interactivity 0.00, 10024 tokens, 14 turns (hit max)
-  - Sample 2: BLEU 0.3141, interactivity 1.00, 2776 tokens, 6 turns (user terminated early)
-  - Samples 3-5: still running
+- **Aggregated results:** avg_bleu=0.2727, avg_interactivity=0.52, avg_tokens=6097
+- **Per-sample:**
+  - Sample 1: BLEU 0.2563, itr 0.00, 10024 tok, 14 turns (hit max)
+  - Sample 2: BLEU 0.3141, itr 1.00, 2776 tok, 6 turns (user terminated)
+  - Sample 3: BLEU 0.3304, itr 0.70, 5344 tok
+  - Sample 4: BLEU 0.1666, itr 0.00, 9562 tok
+  - Sample 5: BLEU 0.2961, itr 0.90, 2777 tok
+- **Notes:** Low interactivity on samples 1 & 4 (model monologued to max turns without engaging user). Higher BLEU correlated with shorter, more interactive conversations.
 
 ### Run 2: SFT Training — 2026-02-06 00:01 UTC — COMPLETE
 - **Output:** `sft-llama8b_test-test_20260206_000112/`, `results/`
