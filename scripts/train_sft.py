@@ -236,6 +236,13 @@ def load_and_train_sft(
     torch.cuda.empty_cache()
     import gc
     gc.collect()
+
+    # clean up distributed process group if active
+    if torch.distributed.is_initialized():
+        torch.distributed.destroy_process_group()
+
+    torch.cuda.empty_cache()
+    gc.collect()
     logger.info("Cleared training model from GPU memory")
 
     # custom eval on data?
@@ -245,6 +252,7 @@ def load_and_train_sft(
         lora_path=f"./{run_name}",
         num_samples=4,
         max_turns=max_turns,
+        gpu_memory_utilization=0.8,
     ) if run_eval else None
 
     logger.info(f"Eval result: {eval_result}")

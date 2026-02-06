@@ -16,6 +16,7 @@ class VLLMAssistant:
         max_tokens: int = 1024,
         temperature: float = 0.7,
         enable_lora: bool = True,
+        quantization: Optional[str] = "bitsandbytes",
         **vllm_kwargs,
     ):
         from vllm import LLM, SamplingParams
@@ -23,7 +24,12 @@ class VLLMAssistant:
         self.sampling_params = SamplingParams(
             temperature=temperature, max_tokens=max_tokens
         )
-        self.llm = LLM(model=model_path, enable_lora=enable_lora, **vllm_kwargs)
+        self.llm = LLM(
+            model=model_path,
+            enable_lora=enable_lora,
+            quantization=quantization,
+            **vllm_kwargs,
+        )
         self.lora_request = None
 
         if lora_path:
