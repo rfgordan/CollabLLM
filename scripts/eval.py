@@ -4,7 +4,7 @@ import argparse
 import logging
 from datasets import load_dataset
 
-from collabllm.evaluation import evaluate_checkpoint, EvalResult
+from collabllm.evaluation import evaluate_checkpoint, evaluate_checkpoint_vllm, EvalResult
 from collabllm.data_processing.dataset_utils import multiturn_dataset_to_sft
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,10 @@ def parse_args() -> argparse.Namespace:
         "--num_samples", type=int, default=0,
         help="Number of eval traces to sample and log to wandb.",
     )
+    parser.add_argument(
+        "--use_vllm", action="store_true",
+        help="Use vLLM for inference (faster, requires vllm package).",
+    )
     return parser.parse_args()
 
 
@@ -52,14 +56,23 @@ def main() -> None:
     dataset = multiturn_dataset_to_sft(raw_dataset, eval_ratio=args.eval_ratio)
     logger.info(f"Dataset preprocessed: {dataset}")
 
-    result = evaluate_checkpoint(
-        model_path=args.model_path,
-        dataset=dataset,
-        lora_path=args.lora_path,
-        use_4bit=args.use_4bit,
-        num_samples=args.num_samples,
-        max_turns=args.max_turns,
-    )
+    if args.use_vllm:
+        result = evaluate_checkpoint_vllm(
+            model_path=args.model_path,
+            dataset=dataset,
+            lora_path=args.lora_path,
+            num_samples=args.num_samples,
+            max_turns=args.max_turns,
+        )
+    else:
+        result = evaluate_checkpoint(
+            model_path=args.model_path,
+            dataset=dataset,
+            lora_path=args.lora_path,
+            use_4bit=args.use_4bit,
+            num_samples=args.num_samples,
+            max_turns=args.max_turns,
+        )
 
     logger.info(f"Eval complete: {result}")
 
