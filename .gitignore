@@ -10,3 +10,4 @@ __pycache__/
 # Package Info
 *.egg-info/
 .DS_Store
+.python-version

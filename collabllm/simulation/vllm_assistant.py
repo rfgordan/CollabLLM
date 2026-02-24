@@ -28,6 +28,7 @@ class VLLMAssistant:
             model=model_path,
             enable_lora=enable_lora,
             quantization=quantization,
+            enforce_eager=True,
             **vllm_kwargs,
         )
         self.lora_request = None
