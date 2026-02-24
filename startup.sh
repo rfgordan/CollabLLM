@@ -25,5 +25,8 @@ cd CollabLLM
 uv sync
 source .venv/bin/activate
 
+# Fix triton backend executable permissions (RunPod installs without execute bits)
+chmod -R +x .venv/lib/python*/site-packages/triton/backends/nvidia/bin/ 2>/dev/null || true
+
 # 4. Optional: start shell or training
 # exec "$@"
