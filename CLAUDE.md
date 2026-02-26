@@ -49,3 +49,7 @@ The current `LocalAssistant` uses HuggingFace `generate()` which re-encodes the 
 3. Format as chat messages with system prompt
 4. Split into train/eval sets
 5. Fine-tune with SFTTrainer using QLoRA
+
+## Experiment Tracking
+
+All experiment results and takeaways must be documented in `doc/` notes. After any experiment run, update or create the relevant file in `doc/` with results, observations, and conclusions.

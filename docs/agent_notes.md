@@ -27,6 +27,7 @@
 ## Gotchas & Learnings
 
 - **GPU memory is tight.** vLLM + 4-bit Llama-8B uses ~44/46 GB. Don't load multiple models at once. Training and eval cannot overlap.
+- **vLLM without `enforce_eager` is ~3.1x faster than HF** (32s vs 100s avg_assistant_time_s, sequential single-request eval). With `enforce_eager=True` it is ~1.74x *slower* — CUDA graphs are the dominant factor. Use vLLM by default; only fall back to `enforce_eager` if the triton ptxas permission error appears.
 - **vLLM speed degrades with context length.** ~60 tok/s early in conversation, drops as turns accumulate.
 - **`--use_4bit` only affects the HF eval path**, not vLLM (vLLM handles its own quantization).
 - **`--eval_ratio 0.01`** on `collabllm-multiturn-medium-large` yields ~5 samples.
@@ -34,6 +35,51 @@
 - **Adapters auto-push to HF Hub** and log to wandb (project: `huggingface`).
 
 ## Run Log
+
+### Run 6: vLLM without enforce_eager — 2026-02-26 ~23:00 UTC
+
+**Parameters:** same as Runs 4 & 5. `enforce_eager` removed from `vllm_assistant.py`.
+
+| Metric | HF (Run 4) | vLLM + eager (Run 5) | vLLM no eager (Run 6) |
+|---|---|---|---|
+| `avg_assistant_time_s` | 99.67s | 173.27s | **32.08s** |
+| `avg_sample_time_s` | 140.10s | 220.58s | 69.12s |
+| `avg_bleu` | 0.2490 | 0.3086 | 0.3110 |
+| `avg_tokens` | 1547.2 | 2225.6 | 1717.0 |
+| `avg_itr` | 0.60 | 0.82 | 0.60 |
+| `words/sec` (approx) | ~15.5 | ~12.8 | **~53.5** |
+| **Speedup vs HF** | 1.0x | 0.58x | **3.11x** |
+
+**Notes:** Removing `enforce_eager` unlocked CUDA graphs (~63 tok/s output vs ~13 tok/s with `enforce_eager`). vLLM without `enforce_eager` is **3.1x faster than HF** and **5.4x faster than vLLM+eager** on sequential single-request eval. The triton ptxas permission error that originally motivated `enforce_eager` did not appear on this run. Recommend vLLM without `enforce_eager` as the default; only add it back if the ptxas error resurfaces.
+
+---
+
+### Runs 4 & 5: Speed Comparison (HF vs vLLM) — 2026-02-26 ~21:21–21:49 UTC
+
+**Parameters:** Llama-3.1-8B-Instruct + LoRA `boreasg/sft-llama8b_test-test_20260206_000112`,
+`collabllm/collabllm-multiturn-medium-large`, eval_ratio=0.01 (~5 samples), max_turns=5
+**Same samples:** guaranteed by hardcoded seed=42 in dataset split.
+
+| Metric | HF (`--use_4bit`) | vLLM (`--use_vllm`) |
+|---|---|---|
+| `avg_assistant_time_s` | 99.67s | 173.27s |
+| `avg_sample_time_s` | 140.10s | 220.58s |
+| `avg_bleu` | 0.2490 | 0.3086 |
+| `avg_tokens` | 1547.2 | 2225.6 |
+| `avg_itr` | 0.60 | 0.82 |
+| `words/sec` (approx) | ~15.5 | ~12.8 |
+| **Speedup** | **1.0x (baseline)** | **0.58x (1.74x slower)** |
+
+**Notes:** vLLM was unexpectedly ~1.74x **slower** than HF in this configuration. Three likely causes:
+1. **`enforce_eager=True`** — disables CUDA graphs (required to avoid triton ptxas permission error on RunPod). This removes the primary compile-time optimization vLLM relies on.
+2. **No batching benefit** — eval runs one request at a time sequentially; vLLM's PagedAttention / continuous batching advantages only manifest with concurrent requests.
+3. **BitsAndBytes in vLLM is less mature** — bnb quantization support in vLLM adds per-request LoRA loading overhead via `LoRARequest`.
+
+The quality difference (avg_itr 0.82 vs 0.60, avg_bleu 0.31 vs 0.25) reflects stochasticity in generation (different sampling seeds / decoding paths), not a real quality gap. vLLM also generated longer responses on average (2225 vs 1547 tokens).
+
+**Conclusion:** vLLM provides no speed benefit here and is slower due to `enforce_eager`. For production use with many concurrent requests and CUDA graphs enabled, vLLM would likely win. For sequential single-request eval on RunPod, HF is faster.
+
+---
 
 ### Run 3: Eval (vLLM) — 2026-02-06 ~00:31 UTC — COMPLETE
 - **Command:** `python scripts/eval.py --dataset_path collabllm/collabllm-multiturn-medium-large --model_path meta-llama/Llama-3.1-8B-Instruct --lora_path boreasg/sft-llama8b_test-test_20260206_000112 --use_4bit --eval_ratio 0.01 --max_turns 14 --num_samples 4 --use_vllm`
