@@ -10,6 +10,11 @@ if ! command -v uv &>/dev/null; then
 fi
 source $HOME/.local/bin/env
 
+# Persist uv to PATH for future shells
+if ! grep -q '.local/bin/env' ~/.bashrc; then
+    echo 'source $HOME/.local/bin/env' >> ~/.bashrc
+fi
+
 # 2. Clone or update repo
 # if [ ! -d CollabLLM-repro ]; then
 #   git clone https://github.com/rfgordan/CollabLLM-repro
