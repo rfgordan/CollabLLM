@@ -36,6 +36,27 @@
 
 ## Run Log
 
+### Runs 7 & 8: Base vs Fine-Tuned Comparison — 2026-02-27 UTC
+
+**Goal:** Compare base Llama-3.1-8B-Instruct vs fine-tuned adapter (`boreasg/sft-llama8b_test-test_20260206_000112`) on the held-out eval split from training.
+
+**Parameters:** vLLM, max_turns=7, eval_ratio=0.05, lower_bound_metric=0.1 → 24 eval samples (deterministic split matching training)
+
+**wandb runs:** `eval-Llama-3.1-8B-Instruct-base-mt7` (`njw7jqrb`), `eval-Llama-3.1-8B-Instruct-finetuned-mt7` (`vs25047c`)
+
+| Metric | Run 7: Base | Run 8: Fine-tuned | Δ |
+|---|---|---|---|
+| `avg_bleu` | 0.3224 | **0.3496** | +8.4% |
+| `avg_tokens` | 2992.5 | **2113.8** | −29.3% |
+| `avg_itr` | 0.825 | **0.913** | +10.7% |
+| `avg_sample_time_s` | — | 84.1s | — |
+
+**Conclusions:** Fine-tuning improves all three metrics. The largest gain is interactivity (+10.7%), suggesting the model learned to engage the user more effectively rather than monologuing. The −29% token reduction indicates more concise, focused outputs. BLEU improvement (+8.4%) is modest but consistent with the paper's findings. The held-out split (lower_bound_metric=0.1, eval_ratio=0.05, seed=42) is reproducible and guaranteed not to overlap with training data.
+
+**Fix applied:** Added `--lower_bound_metric` arg to `scripts/eval.py` so the eval dataset filter matches training (previously defaulted to 0.0, producing a different split).
+
+---
+
 ### Run 6: vLLM without enforce_eager — 2026-02-26 ~23:00 UTC
 
 **Parameters:** same as Runs 4 & 5. `enforce_eager` removed from `vllm_assistant.py`.
