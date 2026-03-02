@@ -68,10 +68,12 @@ def multiturn_dataset_to_dpo(
             continue
 
         prompt = [{"role": "system", "content": system_prompt}] + chosen_row["prompt"]
+        chosen = [{"role": "assistant", "content": chosen_row["completion"]}]
         out_rows.append({
             "prompt": prompt,
-            "chosen": [{"role": "assistant", "content": chosen_row["completion"]}],
+            "chosen": chosen,
             "rejected": [{"role": "assistant", "content": rejected_row["completion"]}],
+            "messages": prompt + chosen,
             "chosen_score": chosen_row["score"],
             "rejected_score": rejected_row["score"],
             "single_turn_prompt": chosen_row["single_turn_prompt"],

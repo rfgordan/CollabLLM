@@ -35,7 +35,7 @@ class TestBasicStructure:
         result = multiturn_dataset_to_dpo(ds)
         row = result["train"][0]
         assert set(row.keys()) >= {"prompt", "chosen", "rejected", "chosen_score", "rejected_score",
-                                    "single_turn_prompt", "single_turn_completion"}
+                                    "messages", "single_turn_prompt", "single_turn_completion"}
 
     def test_chosen_is_highest_score(self):
         ds = make_dataset([
