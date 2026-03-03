@@ -36,6 +36,30 @@
 
 ## Run Log
 
+### Run 10: DPO v2 Training + Eval — 2026-03-03 UTC
+
+**Goal:** Retrain DPO with new defaults (`min_score_gap=0.02`, `max_length=4096`, `eval_strategy=no`) and compare against prior runs on the same 24-sample held-out split.
+
+**Training (Run 10a):** `dpo-dpo-v2-test_20260303_145448` (wandb ID: `hd5id88h`, `rfgordan/collabllm`)
+- 346 train / 18 eval pairs after min_score_gap=0.02 filter
+- 1 epoch, batch_size=1 (OOM at batch_size=4), lr=2e-5, beta=0.1, max_length=4096, eval_strategy=no
+- 346 steps, ~23 min, final train_loss=0.9663
+- Adapter saved locally: `/CollabLLM/dpo-dpo-v2-test_20260303_145448/` (not pushed to HF Hub — eval_strategy=no avoids save-point, local-only)
+
+**Eval (Run 10b):** `eval-Llama-3.1-8B-Instruct-dpo-v2-mt7` (wandb ID: `5txxz462`, `rfgordan/collabllm`)
+- vLLM, max_turns=7, eval_ratio=0.05, lower_bound_metric=0.1, 24 eval samples
+
+| Metric | Run 7: Base | Run 8: SFT | Run 9: DPO-v1 | Run 10: DPO-v2 | Δ v2 vs v1 |
+|---|---|---|---|---|---|
+| `avg_bleu` | 0.3224 | **0.3496** | 0.2731 | 0.2948 | +7.9% |
+| `avg_tokens` | 2992.5 | **2113.8** | 3706.2 | 2960.9 | −20.1% |
+| `avg_itr` | 0.825 | **0.913** | 0.704 | 0.604 | −14.2% |
+| `avg_sample_time_s` | ~69s | ~84s | ~69s | 119.5s | — |
+
+**Conclusions:** DPO-v2 improves over DPO-v1 on BLEU (+7.9%) and token count (−20.1%), bringing token count back in line with the base model. However, interactivity dropped further to 0.604, the worst of all four runs. All three DPO-v2 metrics still underperform both the base model and SFT adapter. The `max_length=4096` fix helped stabilize token count, but the preference signal remains too weak to improve interactivity: 346 pairs, 1 epoch, final loss 0.9663 (above 0.693 random). The falling interactivity despite preference training on higher-itr pairs is a red flag — the DPO objective may be being dominated by the chosen/rejected BLEU signal rather than the interactivity component. **SFT remains the best-performing adapter across all metrics.** Next steps to consider: more epochs, higher-quality preference data, or a combined SFT→DPO pipeline.
+
+---
+
 ### Run 9: DPO Adapter Eval — 2026-03-03 UTC
 
 **Goal:** Evaluate DPO-trained adapter (`boreasg/dpo-llama8b-dpo-test_20260302_211616`) on the same held-out eval split as Runs 7 & 8, to compare DPO vs base vs SFT.
