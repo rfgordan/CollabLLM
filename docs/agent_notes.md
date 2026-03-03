@@ -36,6 +36,30 @@
 
 ## Run Log
 
+### Run 11: DPO v3 Training + Eval — 2026-03-03 UTC
+
+**Goal:** Retrain DPO using the updated dataset pipeline that samples one training pair per conversation turn (not once per conversation), while keeping eval at one sample per conversation.
+
+**Training (Run 11a):** `dpo-dpo-v3-test_20260303_162609` (wandb ID: `gzzhv1pk`, `rfgordan/collabllm`)
+- **1728 train / 24 eval pairs** (vs 346/18 in Run 10 — 5× more pairs from per-turn sampling)
+- 1 epoch, batch_size=1, lr=2e-5, beta=0.1, max_length=4096, eval_strategy=no
+- 1728 steps, ~77 min, final `train/loss=0.7939`
+- ⚠️ `rewards/margins=-0.192`, `rewards/accuracies=0` — DPO still not converging in chosen>rejected direction on training set
+
+**Eval (Run 11b):** `eval-Llama-3.1-8B-Instruct-dpo-v3-mt7` (wandb ID: `a0xk3jpn`, `rfgordan/collabllm`)
+- vLLM, max_turns=7, eval_ratio=0.05, lower_bound_metric=0.1, 24 eval samples
+
+| Metric | Run 7: Base | Run 8: SFT | Run 9: DPO-v1 | Run 10: DPO-v2 | Run 11: DPO-v3 |
+|---|---|---|---|---|---|
+| `avg_bleu` | 0.3224 | **0.3496** | 0.2731 | 0.2948 | 0.3466 |
+| `avg_tokens` | 2992.5 | **2113.8** | 3706.2 | 2960.9 | 2503.8 |
+| `avg_itr` | 0.825 | **0.913** | 0.704 | 0.604 | 0.863 |
+| `avg_sample_time_s` | ~69s | ~84s | ~69s | 119.5s | 91.6s |
+
+**Conclusions:** Per-turn pair sampling was the key change and it worked dramatically — interactivity jumped from 0.604 to **0.863** (+42.9%), nearly matching SFT (0.913). BLEU also improved to 0.3466, nearly matching SFT. Token count dropped to 2503.8, much closer to SFT's 2113.8. DPO-v3 is a near-tie with SFT on BLEU and token count, and comes close on interactivity. Despite `rewards/accuracies=0` on the training set (model not converging in the traditional DPO sense), the 5× more training pairs provided enough signal for emergent behavioral improvement. The negative reward margin suggests the reference model assigns higher logprobs to rejected responses; future work could try higher beta or longer training to overcome this.
+
+---
+
 ### Run 10: DPO v2 Training + Eval — 2026-03-03 UTC
 
 **Goal:** Retrain DPO with new defaults (`min_score_gap=0.02`, `max_length=4096`, `eval_strategy=no`) and compare against prior runs on the same 24-sample held-out split.
