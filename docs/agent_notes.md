@@ -36,6 +36,24 @@
 
 ## Run Log
 
+### Run 9: DPO Adapter Eval — 2026-03-03 UTC
+
+**Goal:** Evaluate DPO-trained adapter (`boreasg/dpo-llama8b-dpo-test_20260302_211616`) on the same held-out eval split as Runs 7 & 8, to compare DPO vs base vs SFT.
+
+**Parameters:** vLLM, max_turns=7, eval_ratio=0.05, lower_bound_metric=0.1 → 24 eval samples (same deterministic split)
+
+**wandb run:** `eval-Llama-3.1-8B-Instruct-dpo-mt7` (`jwwopnaf`)
+
+| Metric | Run 7: Base | Run 8: SFT | Run 9: DPO | Δ DPO vs SFT |
+|---|---|---|---|---|
+| `avg_bleu` | 0.3224 | **0.3496** | 0.2731 | −21.9% |
+| `avg_tokens` | 2992.5 | **2113.8** | 3706.2 | +75.3% |
+| `avg_itr` | 0.825 | **0.913** | 0.704 | −22.9% |
+
+**Conclusions:** The DPO adapter underperforms both the base model and SFT on all three metrics. BLEU dropped −15% vs base and −22% vs SFT; interactivity fell to 0.70 (below even base at 0.83); token count ballooned to 3706 — longer than base and 75% more than SFT. The DPO training run used a very small dataset (the output of a single `train_dpo_offline` call on a subset) and only 1 epoch, so the adapter likely moved the model away from the SFT distribution without sufficient signal to improve it. This is a common failure mode for offline DPO with low-quality or small preference datasets. The SFT adapter remains the best-performing model on this eval.
+
+---
+
 ### Runs 7 & 8: Base vs Fine-Tuned Comparison — 2026-02-27 UTC
 
 **Goal:** Compare base Llama-3.1-8B-Instruct vs fine-tuned adapter (`boreasg/sft-llama8b_test-test_20260206_000112`) on the held-out eval split from training.
