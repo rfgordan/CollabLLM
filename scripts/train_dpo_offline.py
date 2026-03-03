@@ -110,6 +110,18 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
         help="Minimum score gap between chosen and rejected responses.",
     )
+    parser.add_argument(
+        "--max_length",
+        type=int,
+        default=4096,
+        help="Maximum total sequence length (prompt + response).",
+    )
+    parser.add_argument(
+        "--max_prompt_length",
+        type=int,
+        default=2048,
+        help="Maximum prompt length; prompt is truncated before response if exceeded.",
+    )
     return parser.parse_args()
 
 def _get_param_counts(model: torch.nn.Module) -> dict:
@@ -136,6 +148,8 @@ def load_and_train_dpo(
         lora_dropout: float = 0.1,
         beta: float = 0.1,
         min_score_gap: float = 0.0,
+        max_length: int = 4096,
+        max_prompt_length: int = 2048,
 ):
     """Load a Hugging Face model and perform offline DPO fine-tuning on the provided dataset."""
 
@@ -224,6 +238,8 @@ def load_and_train_dpo(
         eval_strategy="epoch",
         save_strategy="epoch",
         beta=beta,
+        max_length=max_length,
+        max_prompt_length=max_prompt_length,
     )
 
     trainer = DPOTrainer(
@@ -306,6 +322,8 @@ def main() -> None:
         lora_dropout=args.lora_dropout,
         beta=args.beta,
         min_score_gap=args.min_score_gap,
+        max_length=args.max_length,
+        max_prompt_length=args.max_prompt_length,
     )
 
 

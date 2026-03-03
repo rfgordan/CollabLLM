@@ -96,6 +96,12 @@ def parse_args() -> argparse.Namespace:
         default=0.1,
         help="LoRA dropout rate.",
     )
+    parser.add_argument(
+        "--max_seq_length",
+        type=int,
+        default=4096,
+        help="Maximum sequence length for training.",
+    )
     return parser.parse_args()
 
 def _get_param_counts(model: torch.nn.Module) -> dict:
@@ -119,8 +125,9 @@ def load_and_train_sft(
         num_train_epochs: int = 3,
         lora_alpha: int = 16,
         lora_r: int = 16,
-        lora_dropout: float = 0.1,):
-    
+        lora_dropout: float = 0.1,
+        max_seq_length: int = 4096,):
+
     """ Load a Hugging Face model and perform supervised fine-tuning (SFT) on the provided dataset. """
 
     if parse_secrets_runpod:
@@ -208,6 +215,7 @@ def load_and_train_sft(
         eval_strategy="epoch",
         # eval_steps=500,
         save_strategy="epoch",
+        max_seq_length=max_seq_length,
         # packing=True,
     )
 
@@ -322,6 +330,7 @@ def main() -> None:
         lora_alpha=args.lora_alpha,
         lora_r=args.lora_r,
         lora_dropout=args.lora_dropout,
+        max_seq_length=args.max_seq_length,
     )
 
 if __name__ == "__main__":
