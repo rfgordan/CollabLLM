@@ -166,13 +166,15 @@ class TestEvalSplit:
         rows = []
         for i in range(10):
             rows += [
-                make_row(f"c{i}", 0, 0.9, "good"),
-                make_row(f"c{i}", 0, 0.1, "bad"),
+                make_row(f"c{i}", 0, 0.9, "good", single_turn_prompt=f"c{i}"),
+                make_row(f"c{i}", 0, 0.1, "bad", single_turn_prompt=f"c{i}"),
             ]
         ds = make_dataset(rows)
         result = multiturn_dataset_to_dpo(ds, eval_ratio=0.2)
         assert len(result["eval"]) == 2
         assert len(result["train"]) == 8
+        # one eval row per conversation
+        assert len({row["single_turn_prompt"] for row in result["eval"]}) == len(result["eval"])
 
     def test_no_eval_split_by_default(self):
         ds = make_dataset([
@@ -182,3 +184,18 @@ class TestEvalSplit:
         result = multiturn_dataset_to_dpo(ds)
         assert len(result["eval"]) == 0
         assert len(result["train"]) == 1
+
+    def test_eval_split_one_row_per_conversation(self):
+        ds = make_dataset([
+            make_row("c1", 0, 0.9, "c1t0 good", single_turn_prompt="c1t0"),
+            make_row("c1", 0, 0.1, "c1t0 bad", single_turn_prompt="c1t0"),
+            make_row("c1", 1, 0.8, "c1t1 good", single_turn_prompt="c1t1"),
+            make_row("c1", 1, 0.2, "c1t1 bad", single_turn_prompt="c1t1"),
+            make_row("c2", 0, 0.9, "c2t0 good", single_turn_prompt="c2t0"),
+            make_row("c2", 0, 0.1, "c2t0 bad", single_turn_prompt="c2t0"),
+            make_row("c3", 0, 0.9, "c3t0 good", single_turn_prompt="c3t0"),
+            make_row("c3", 0, 0.1, "c3t0 bad", single_turn_prompt="c3t0"),
+        ])
+        result = multiturn_dataset_to_dpo(ds, eval_ratio=1 / 3)
+        assert len(result["eval"]) == 1
+        assert len(result["train"]) == 3

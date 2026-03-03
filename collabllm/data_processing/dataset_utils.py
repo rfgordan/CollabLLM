@@ -25,6 +25,46 @@ def _uniform_split(dataset: Dataset, eval_ratio: float = 0, seed: int = 42) -> D
         "eval": dataset.select(sorted(eval_idx))
     })
 
+def _conv_split(rows: List[Dict[str, Any]], eval_ratio: float = 0, seed: int = 42) -> DatasetDict:
+    if eval_ratio >= 1.0:
+        logger.warning("eval_ratio >= 1.0, the entire dataset will be used for evaluation.")
+
+    if not rows:
+        empty = datasets.Dataset.from_list([])
+        return DatasetDict({"train": empty, "eval": empty})
+
+    conv_ids = sorted({row["conv_id"] for row in rows})
+    k = int(len(conv_ids) * eval_ratio)
+    k = min(k, len(conv_ids))
+
+    random.seed(seed)
+    eval_ids = set(random.sample(conv_ids, k=k))
+
+    eval_rows = []
+    eval_seen = set()
+    for row in rows:
+        conv_id = row["conv_id"]
+        if conv_id not in eval_ids or conv_id in eval_seen:
+            continue
+        eval_rows.append(row)
+        eval_seen.add(conv_id)
+
+    train_rows = [
+        row for row in rows
+        if row["conv_id"] not in eval_ids
+    ]
+
+    def _strip_keys(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return [
+            {k: v for k, v in row.items() if k not in {"conv_id", "turn_id"}}
+            for row in items
+        ]
+
+    return DatasetDict({
+        "train": datasets.Dataset.from_list(_strip_keys(train_rows)),
+        "eval": datasets.Dataset.from_list(_strip_keys(eval_rows)),
+    })
+
 def multiturn_dataset_to_dpo(
         dataset: Dataset,
         eval_ratio: Optional[float] = 0.0,
@@ -63,6 +103,8 @@ def multiturn_dataset_to_dpo(
         prompt = [{"role": "system", "content": system_prompt}] + chosen_row["prompt"]
         chosen = [{"role": "assistant", "content": chosen_row["completion"]}]
         out_rows.append({
+            "conv_id": chosen_row["conv_id"],
+            "turn_id": chosen_row["turn_id"],
             "prompt": prompt,
             "chosen": chosen,
             "rejected": [{"role": "assistant", "content": rejected_row["completion"]}],
@@ -73,8 +115,7 @@ def multiturn_dataset_to_dpo(
             "single_turn_completion": chosen_row["single_turn_completion"],
         })
 
-    out_dataset = datasets.Dataset.from_list(out_rows)
-    return _uniform_split(out_dataset, eval_ratio=eval_ratio)
+    return _conv_split(out_rows, eval_ratio=eval_ratio)
 
 
 # given a multiturn dataset, from HF, map to SFT format according to choice logic
