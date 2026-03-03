@@ -56,7 +56,7 @@ class TestParseArgs:
         assert args.lora_r == 16
         assert args.lora_dropout == pytest.approx(0.1)
         assert args.beta == pytest.approx(0.1)
-        assert args.min_score_gap == pytest.approx(0.0)
+        assert args.min_score_gap == pytest.approx(0.02)
         assert args.eval_ratio == pytest.approx(0.05)
         assert args.max_turns == 5
         assert args.parse_secrets_runpod is False

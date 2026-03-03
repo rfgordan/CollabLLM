@@ -107,7 +107,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--min_score_gap",
         type=float,
-        default=0.0,
+        default=0.02,
         help="Minimum score gap between chosen and rejected responses.",
     )
     parser.add_argument(
@@ -147,7 +147,7 @@ def load_and_train_dpo(
         lora_r: int = 16,
         lora_dropout: float = 0.1,
         beta: float = 0.1,
-        min_score_gap: float = 0.0,
+        min_score_gap: float = 0.02,
         max_length: int = 4096,
         max_prompt_length: int = 2048,
 ):
