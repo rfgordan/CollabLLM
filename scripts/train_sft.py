@@ -199,6 +199,9 @@ def load_and_train_sft(
 
     run_name: str = f"sft-{output_name_tag}-{get_timebased_filename()}"
 
+    import wandb
+    wandb.init(project="collabllm", name=run_name, job_type="train")
+
     # training
     training_arguments = SFTConfig(
         output_dir="./results",

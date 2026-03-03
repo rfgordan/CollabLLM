@@ -122,6 +122,12 @@ def parse_args() -> argparse.Namespace:
         default=2048,
         help="Maximum prompt length; prompt is truncated before response if exceeded.",
     )
+    parser.add_argument(
+        "--eval_strategy",
+        type=str,
+        default="epoch",
+        help="Evaluation strategy for DPOTrainer ('epoch', 'steps', 'no').",
+    )
     return parser.parse_args()
 
 def _get_param_counts(model: torch.nn.Module) -> dict:
@@ -150,6 +156,7 @@ def load_and_train_dpo(
         min_score_gap: float = 0.02,
         max_length: int = 4096,
         max_prompt_length: int = 2048,
+        eval_strategy: str = "epoch",
 ):
     """Load a Hugging Face model and perform offline DPO fine-tuning on the provided dataset."""
 
@@ -223,6 +230,9 @@ def load_and_train_dpo(
 
     run_name: str = f"dpo-{output_name_tag}-{get_timebased_filename()}"
 
+    import wandb
+    wandb.init(project="collabllm", name=run_name, job_type="train")
+
     training_arguments = DPOConfig(
         output_dir="./results",
         hub_model_id=run_name,
@@ -235,11 +245,10 @@ def load_and_train_dpo(
         learning_rate=learning_rate,
         gradient_checkpointing=True,
         num_train_epochs=num_train_epochs,
-        eval_strategy="epoch",
+        eval_strategy=eval_strategy,
         save_strategy="epoch",
         beta=beta,
         max_length=max_length,
-        max_prompt_length=max_prompt_length,
     )
 
     trainer = DPOTrainer(
@@ -324,6 +333,7 @@ def main() -> None:
         min_score_gap=args.min_score_gap,
         max_length=args.max_length,
         max_prompt_length=args.max_prompt_length,
+        eval_strategy=args.eval_strategy,
     )
 
 
