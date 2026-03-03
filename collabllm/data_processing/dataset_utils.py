@@ -32,13 +32,14 @@ def multiturn_dataset_to_dpo(
         system_prompt: str = DEFAULT_SYSTEM_PROMPT) -> DatasetDict:
     """Convert a multiturn dataset to DPO format.
 
-    For each conversation, selects the highest-turn that has at least two
-    responses with distinct scores, then pairs the highest-scoring response
-    (chosen) against the lowest-scoring response (rejected).
+    For every (conv_id, turn_id) that has at least two responses with a score
+    gap >= min_score_gap, emits a DPO pair: highest-scoring response as chosen,
+    lowest-scoring as rejected. Multiple turns per conversation each produce a
+    separate training row.
 
     Output columns: prompt, chosen, rejected, chosen_score, rejected_score,
-    single_turn_prompt, single_turn_completion, where prompt/chosen/rejected
-    are lists of message dicts (TRL conversational format).
+    messages, single_turn_prompt, single_turn_completion, where
+    prompt/chosen/rejected are lists of message dicts (TRL conversational format).
     """
     # Group rows by (conv_id, turn_id) — each group may have multiple responses
     groups: Dict[Any, List[Any]] = {}
@@ -46,25 +47,17 @@ def multiturn_dataset_to_dpo(
         key = (row["conv_id"], row["turn_id"])
         groups.setdefault(key, []).append(row)
 
-    # For each conv_id pick the highest turn_id that has >= 2 distinct-score responses
-    conv_id_to_best: Dict[Any, Any] = {}
-    for (conv_id, turn_id), rows in groups.items():
+    out_rows = []
+    for rows in groups.values():
         if len(rows) < 2:
             continue
-        scores = [r["score"] for r in rows]
-        if len(set(scores)) < 2:
-            continue  # all responses scored identically — no preference signal
-        prev = conv_id_to_best.get(conv_id)
-        if prev is None or turn_id > prev["turn_id"]:
-            conv_id_to_best[conv_id] = {"turn_id": turn_id, "rows": rows}
 
-    out_rows = []
-    for entry in conv_id_to_best.values():
-        rows_sorted = sorted(entry["rows"], key=lambda r: r["score"], reverse=True)
+        rows_sorted = sorted(rows, key=lambda r: r["score"], reverse=True)
         chosen_row = rows_sorted[0]
         rejected_row = rows_sorted[-1]
 
-        if chosen_row["score"] - rejected_row["score"] < min_score_gap:
+        gap = chosen_row["score"] - rejected_row["score"]
+        if gap <= 0 or gap < min_score_gap:
             continue
 
         prompt = [{"role": "system", "content": system_prompt}] + chosen_row["prompt"]

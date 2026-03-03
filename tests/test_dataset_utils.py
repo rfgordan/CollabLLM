@@ -88,7 +88,7 @@ class TestBasicStructure:
 
 class TestTurnSelection:
 
-    def test_selects_highest_turn_id(self):
+    def test_emits_row_per_valid_turn(self):
         ds = make_dataset([
             make_row("c1", 0, 0.9, "turn0 good"),
             make_row("c1", 0, 0.3, "turn0 bad"),
@@ -96,12 +96,9 @@ class TestTurnSelection:
             make_row("c1", 1, 0.2, "turn1 bad"),
         ])
         result = multiturn_dataset_to_dpo(ds)
-        assert len(result["train"]) == 1
-        row = result["train"][0]
-        assert row["chosen"][0]["content"] == "turn1 good"
-        assert row["rejected"][0]["content"] == "turn1 bad"
+        assert len(result["train"]) == 2
 
-    def test_one_row_per_conv_id(self):
+    def test_emits_one_row_per_conv_when_one_turn(self):
         ds = make_dataset([
             make_row("c1", 0, 0.9, "c1 good"),
             make_row("c1", 0, 0.3, "c1 bad"),
@@ -110,6 +107,18 @@ class TestTurnSelection:
         ])
         result = multiturn_dataset_to_dpo(ds)
         assert len(result["train"]) == 2
+
+    def test_all_turns_across_conversations(self):
+        ds = make_dataset([
+            make_row("c1", 0, 0.9, "c1t0 good"),
+            make_row("c1", 0, 0.1, "c1t0 bad"),
+            make_row("c1", 1, 0.8, "c1t1 good"),
+            make_row("c1", 1, 0.2, "c1t1 bad"),
+            make_row("c2", 0, 0.7, "c2t0 good"),
+            make_row("c2", 0, 0.3, "c2t0 bad"),
+        ])
+        result = multiturn_dataset_to_dpo(ds)
+        assert len(result["train"]) == 3
 
 
 class TestFiltering:
