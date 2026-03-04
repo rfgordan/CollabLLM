@@ -36,6 +36,43 @@
 
 ## Run Log
 
+### Runs 12 & 13: DPO Hyperparameter Search — 2026-03-03/04 UTC
+
+**Goal:** Test two hyperparameter variations against the Run 11 DPO-v3 baseline: (a) 3 epochs instead of 1, (b) lower beta (0.05 vs 0.1).
+
+**Run 12a training:** `dpo-dpo-v4-3ep-test_20260303_183354` (wandb ID: `vy890lot`)
+- Same as Run 11 except `num_train_epochs=3` → 5184 steps, ~3h51m
+- final `train_loss=0.652`; by epoch 3: `rewards/accuracies=1.0`, `rewards/margins=7–18` (large positive — DPO objective converged)
+
+**Run 13a training:** `dpo-dpo-v5-beta0.05-test_20260304_000309`
+- Same as Run 11 except `beta=0.05`, 1 epoch
+
+**Eval:** vLLM, max_turns=7, eval_ratio=0.05, lower_bound_metric=0.1, 24 eval samples
+
+| Metric | R11 DPO-v3 (baseline) | R12 DPO-v4 (3 epochs) | R13 DPO-v5 (β=0.05) |
+|---|---|---|---|
+| `avg_bleu` | 0.3466 | 0.3252 | 0.2527 |
+| `avg_tokens` | 2503.8 | 2594.8 | **856.7** |
+| `avg_itr` | 0.863 | **0.904** | 0.188 |
+| `avg_sample_time_s` | 91.6s | 90.4s | 47.4s |
+
+**Full comparison table:**
+
+| Metric | R7 Base | R8 SFT | R11 DPO-v3 | R12 DPO-v4 (3ep) | R13 DPO-v5 (β=0.05) |
+|---|---|---|---|---|---|
+| `avg_bleu` | 0.3224 | **0.3496** | 0.3466 | 0.3252 | 0.2527 |
+| `avg_tokens` | 2992.5 | **2113.8** | 2503.8 | 2594.8 | 856.7 |
+| `avg_itr` | 0.825 | 0.913 | 0.863 | **0.904** | 0.188 |
+
+**Conclusions:**
+- **3 epochs (R12):** Interactivity improved to 0.904 (essentially tied with SFT's 0.913), but BLEU dropped to 0.3252 — below both Run 11 and SFT. The model fully converged on the DPO objective (margins ~7–18 by epoch 3) but slightly overfit, trading BLEU quality for interactive behavior.
+- **beta=0.05 (R13): Complete collapse.** avg_itr dropped from 0.863 → 0.188, avg_tokens from 2504 → 857. Lower beta allows more deviation from the reference model; with noisy DPO signal (mixed reward margins), the model collapsed into terse, non-interactive responses. Beta=0.1 appears to be the right regularization strength for this dataset.
+- **Best on interactivity:** R12 3-epoch DPO (0.904) ≈ SFT (0.913)
+- **Best on BLEU:** SFT (0.3496) still leads; R11 DPO-v3 (0.3466) is close
+- **Overall best DPO:** Run 11 (1 epoch, β=0.1) offers the best BLEU/itr tradeoff among DPO runs
+
+---
+
 ### Run 11: DPO v3 Training + Eval — 2026-03-03 UTC
 
 **Goal:** Retrain DPO using the updated dataset pipeline that samples one training pair per conversation turn (not once per conversation), while keeping eval at one sample per conversation.
